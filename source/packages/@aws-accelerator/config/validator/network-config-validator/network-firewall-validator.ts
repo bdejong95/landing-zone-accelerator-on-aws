@@ -1418,13 +1418,20 @@ export class NetworkFirewallValidator {
     // Validate RAM shares exist in desired accounts
     const vpc = helpers.getVpc(firewall.vpc)!;
     const vpcAccountNames = helpers.getVpcAccountNames(vpc);
-    const policyAccountNames = helpers.getDelegatedAdminShareTargets(firewallPolicy.shareTargets);
-    const targetComparison = helpers.compareTargetAccounts(vpcAccountNames, policyAccountNames);
+    
+    // Skip share validation if policy is deployed in the same account as the VPC
+    if (firewallPolicy.account && vpcAccountNames.includes(firewallPolicy.account)) {
+      // Policy is deployed locally in the VPC's account, no sharing needed
+    } else {
+      // Policy is in different account, validate RAM shares
+      const policyAccountNames = helpers.getDelegatedAdminShareTargets(firewallPolicy.shareTargets);
+      const targetComparison = helpers.compareTargetAccounts(vpcAccountNames, policyAccountNames);
 
-    if (targetComparison.length > 0) {
-      errors.push(
-        `[Network Firewall firewall ${firewall.name}]: firewall policy "${firewall.firewallPolicy}" is not shared with one or more target OU(s)/account(s) for VPC "${vpc.name}." Missing accounts: ${targetComparison}`,
-      );
+      if (targetComparison.length > 0) {
+        errors.push(
+          `[Network Firewall firewall ${firewall.name}]: firewall policy "${firewall.firewallPolicy}" is not shared with one or more target OU(s)/account(s) for VPC "${vpc.name}." Missing accounts: ${targetComparison}`,
+        );
+      }
     }
     // Validate regions match
     if (!firewallPolicy.regions.includes(vpc.region)) {
