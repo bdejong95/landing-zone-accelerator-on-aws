@@ -1030,7 +1030,7 @@ export class NetworkFirewallValidator {
       }
 
       // Validate rule group references
-      this.validatePolicyRuleGroupReferences(policy, allRules, statelessPolicyNames, 'STATELESS', errors, helpers);
+      this.validatePolicyRuleGroupReferences(policy, allRules, statelessPolicyNames, 'STATELESS', errors);
     }
   }
 
@@ -1087,7 +1087,7 @@ export class NetworkFirewallValidator {
       // Validate STRICT_ORDER policies
       this.validatePolicyStatefulStrictOrder(policy, helpers, errors);
       // Validate rule group references
-      this.validatePolicyRuleGroupReferences(policy, allRules, statefulPolicyNames, 'STATEFUL', errors, helpers);
+      this.validatePolicyRuleGroupReferences(policy, allRules, statefulPolicyNames, 'STATEFUL', errors);
     }
   }
 
@@ -1153,7 +1153,6 @@ export class NetworkFirewallValidator {
     policyNames: string[],
     groupType: 'STATEFUL' | 'STATELESS',
     errors: string[],
-    helpers: NetworkValidatorFunctions,
   ) {
     for (const name of policyNames) {
       const group = allRules.get(name);
@@ -1177,7 +1176,7 @@ export class NetworkFirewallValidator {
           );
         }
         // Validate rule group is accessible from policy account
-        this.validatePolicyRuleGroupAccess(policy, group, name, helpers, errors);
+        this.validatePolicyRuleGroupAccess(policy, group, name, errors);
       }
     }
   }
@@ -1187,14 +1186,12 @@ export class NetworkFirewallValidator {
    * @param policy
    * @param group
    * @param groupName
-   * @param helpers
    * @param errors
    */
   private validatePolicyRuleGroupAccess(
     policy: NfwFirewallPolicyConfig,
     group: NfwRuleGroupConfig,
     groupName: string,
-    helpers: NetworkValidatorFunctions,
     errors: string[],
   ) {
     // If policy has account property, rule group MUST be in same account
