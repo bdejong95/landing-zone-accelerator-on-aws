@@ -1030,7 +1030,7 @@ export class NetworkFirewallValidator {
       }
 
       // Validate rule group references
-      this.validatePolicyRuleGroupReferences(policy, allRules, statelessPolicyNames, 'STATELESS', errors);
+      this.validatePolicyRuleGroupReferences(policy, allRules, statelessPolicyNames, 'STATELESS', errors, helpers);
     }
   }
 
@@ -1086,8 +1086,8 @@ export class NetworkFirewallValidator {
 
       // Validate STRICT_ORDER policies
       this.validatePolicyStatefulStrictOrder(policy, helpers, errors);
-      // Validate eulw group references
-      this.validatePolicyRuleGroupReferences(policy, allRules, statefulPolicyNames, 'STATEFUL', errors);
+      // Validate rule group references
+      this.validatePolicyRuleGroupReferences(policy, allRules, statefulPolicyNames, 'STATEFUL', errors, helpers);
     }
   }
 
@@ -1153,6 +1153,7 @@ export class NetworkFirewallValidator {
     policyNames: string[],
     groupType: 'STATEFUL' | 'STATELESS',
     errors: string[],
+    helpers: NetworkValidatorFunctions,
   ) {
     for (const name of policyNames) {
       const group = allRules.get(name);
@@ -1175,6 +1176,40 @@ export class NetworkFirewallValidator {
             `[Network Firewall policy ${policy.name}]: rule group reference "${name}" is not configured as a ${groupType} rule group type`,
           );
         }
+        // Validate rule group is accessible from policy account
+        this.validatePolicyRuleGroupAccess(policy, group, name, helpers, errors);
+      }
+    }
+  }
+
+  /**
+   * Validate that a policy can access a rule group
+   * @param policy
+   * @param group
+   * @param groupName
+   * @param helpers
+   * @param errors
+   */
+  private validatePolicyRuleGroupAccess(
+    policy: NfwFirewallPolicyConfig,
+    group: NfwRuleGroupConfig,
+    groupName: string,
+    helpers: NetworkValidatorFunctions,
+    errors: string[],
+  ) {
+    // If policy has account property, check if rule group is accessible
+    if (policy.account) {
+      // If rule group is in same account, no sharing needed
+      if (group.account && group.account === policy.account) {
+        return;
+      }
+      
+      // If rule group is in different account or delegated admin, validate sharing
+      const ruleGroupAccountNames = helpers.getDelegatedAdminShareTargets(group.shareTargets);
+      if (!ruleGroupAccountNames.includes(policy.account)) {
+        errors.push(
+          `[Network Firewall policy ${policy.name}]: rule group "${groupName}" is not shared with policy account "${policy.account}". Rule group must have shareTargets that includes this account.`,
+        );
       }
     }
   }
