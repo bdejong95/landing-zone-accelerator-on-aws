@@ -1197,20 +1197,20 @@ export class NetworkFirewallValidator {
     helpers: NetworkValidatorFunctions,
     errors: string[],
   ) {
-    // If policy has account property, check if rule group is accessible
+    // If policy has account property, rule group MUST be in same account
     if (policy.account) {
-      // If rule group is in same account, no sharing needed
-      if (group.account && group.account === policy.account) {
-        return;
-      }
-      
-      // If rule group is in different account or delegated admin, validate sharing
-      const ruleGroupAccountNames = helpers.getDelegatedAdminShareTargets(group.shareTargets);
-      if (!ruleGroupAccountNames.includes(policy.account)) {
+      if (!group.account || group.account !== policy.account) {
         errors.push(
-          `[Network Firewall policy ${policy.name}]: rule group "${groupName}" is not shared with policy account "${policy.account}". Rule group must have shareTargets that includes this account.`,
+          `[Network Firewall policy ${policy.name}]: rule group "${groupName}" must be deployed in the same account as the policy. Policy account: "${policy.account}"; Rule group account: "${group.account || 'delegated admin (not specified)'}".`,
         );
       }
+    }
+    
+    // If rule group has account property, all policies referencing it MUST be in same account
+    if (group.account && policy.account && group.account !== policy.account) {
+      errors.push(
+        `[Network Firewall policy ${policy.name}]: rule group "${groupName}" is deployed in account "${group.account}" but policy is in account "${policy.account}". They must be in the same account.`,
+      );
     }
   }
 
