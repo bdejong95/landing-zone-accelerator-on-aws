@@ -1086,7 +1086,7 @@ export class NetworkFirewallValidator {
 
       // Validate STRICT_ORDER policies
       this.validatePolicyStatefulStrictOrder(policy, helpers, errors);
-      // Validate eulw group references
+      // Validate rule group references
       this.validatePolicyRuleGroupReferences(policy, allRules, statefulPolicyNames, 'STATEFUL', errors);
     }
   }
@@ -1175,7 +1175,39 @@ export class NetworkFirewallValidator {
             `[Network Firewall policy ${policy.name}]: rule group reference "${name}" is not configured as a ${groupType} rule group type`,
           );
         }
+        // Validate rule group is accessible from policy account
+        this.validatePolicyRuleGroupAccess(policy, group, name, errors);
       }
+    }
+  }
+
+  /**
+   * Validate that a policy can access a rule group
+   * @param policy
+   * @param group
+   * @param groupName
+   * @param errors
+   */
+  private validatePolicyRuleGroupAccess(
+    policy: NfwFirewallPolicyConfig,
+    group: NfwRuleGroupConfig,
+    groupName: string,
+    errors: string[],
+  ) {
+    // If policy has account property, rule group MUST be in same account
+    if (policy.account) {
+      if (!group.account || group.account !== policy.account) {
+        errors.push(
+          `[Network Firewall policy ${policy.name}]: rule group "${groupName}" must be deployed in the same account as the policy. Policy account: "${policy.account}"; Rule group account: "${group.account || 'delegated admin (not specified)'}".`,
+        );
+      }
+    }
+    
+    // If rule group has account property, all policies referencing it MUST be in same account
+    if (group.account && policy.account && group.account !== policy.account) {
+      errors.push(
+        `[Network Firewall policy ${policy.name}]: rule group "${groupName}" is deployed in account "${group.account}" but policy is in account "${policy.account}". They must be in the same account.`,
+      );
     }
   }
 
@@ -1418,13 +1450,20 @@ export class NetworkFirewallValidator {
     // Validate RAM shares exist in desired accounts
     const vpc = helpers.getVpc(firewall.vpc)!;
     const vpcAccountNames = helpers.getVpcAccountNames(vpc);
-    const policyAccountNames = helpers.getDelegatedAdminShareTargets(firewallPolicy.shareTargets);
-    const targetComparison = helpers.compareTargetAccounts(vpcAccountNames, policyAccountNames);
+    
+    // Skip share validation if policy is deployed in the same account as the VPC
+    if (firewallPolicy.account && vpcAccountNames.includes(firewallPolicy.account)) {
+      // Policy is deployed locally in the VPC's account, no sharing needed
+    } else {
+      // Policy is in different account, validate RAM shares
+      const policyAccountNames = helpers.getDelegatedAdminShareTargets(firewallPolicy.shareTargets);
+      const targetComparison = helpers.compareTargetAccounts(vpcAccountNames, policyAccountNames);
 
-    if (targetComparison.length > 0) {
-      errors.push(
-        `[Network Firewall firewall ${firewall.name}]: firewall policy "${firewall.firewallPolicy}" is not shared with one or more target OU(s)/account(s) for VPC "${vpc.name}." Missing accounts: ${targetComparison}`,
-      );
+      if (targetComparison.length > 0) {
+        errors.push(
+          `[Network Firewall firewall ${firewall.name}]: firewall policy "${firewall.firewallPolicy}" is not shared with one or more target OU(s)/account(s) for VPC "${vpc.name}." Missing accounts: ${targetComparison}`,
+        );
+      }
     }
     // Validate regions match
     if (!firewallPolicy.regions.includes(vpc.region)) {

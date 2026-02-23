@@ -594,18 +594,32 @@ export abstract class NetworkStack extends AcceleratorStack {
 
         if (isArn(firewallItem.firewallPolicy)) {
           policyArn = firewallItem.firewallPolicy;
-        } else if (delegatedAdminAccountId === cdk.Stack.of(this).account) {
-          policyArn = cdk.aws_ssm.StringParameter.valueForStringParameter(
-            this,
-            this.getSsmPath(SsmResourceType.NFW_POLICY, [firewallItem.firewallPolicy]),
-          );
         } else {
-          policyArn = this.getResourceShare(
-            `${firewallItem.firewallPolicy}_NetworkFirewallPolicyShare`,
-            'network-firewall:FirewallPolicy',
-            delegatedAdminAccountId,
-            this.cloudwatchKey,
-          ).resourceShareItemArn;
+          // Find the policy configuration
+          const policyConfig = props.networkConfig.centralNetworkServices?.networkFirewall?.policies.find(
+            p => p.name === firewallItem.firewallPolicy,
+          );
+
+          // Check if policy is deployed in current account or delegated admin account
+          const policyAccountId = policyConfig?.account
+            ? props.accountsConfig.getAccountId(policyConfig.account)
+            : delegatedAdminAccountId;
+
+          if (policyAccountId === cdk.Stack.of(this).account) {
+            // Policy is in current account, read from SSM
+            policyArn = cdk.aws_ssm.StringParameter.valueForStringParameter(
+              this,
+              this.getSsmPath(SsmResourceType.NFW_POLICY, [firewallItem.firewallPolicy]),
+            );
+          } else {
+            // Policy is in different account, lookup RAM share
+            policyArn = this.getResourceShare(
+              `${firewallItem.firewallPolicy}_NetworkFirewallPolicyShare`,
+              'network-firewall:FirewallPolicy',
+              policyAccountId,
+              this.cloudwatchKey,
+            ).resourceShareItemArn;
+          }
         }
         policyMap.set(firewallItem.firewallPolicy, policyArn);
       }
